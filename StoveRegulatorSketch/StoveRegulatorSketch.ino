@@ -251,6 +251,6 @@ void loop() {
       oldPot = pot;
       oldDamper =  damper;
     }
-    delay(5000);
+    delay(4000);
   }
 }
