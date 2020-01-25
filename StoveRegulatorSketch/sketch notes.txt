@@ -1,0 +1,5 @@
+
+Add serial plotter output for PID parameters along with temperature and damper angle
+
+Fix servo movement so that each cycle takes the same amount of time regardless of angle moved
+  - need to accumulate a count for each servo movement and subtract that from the overall delay time for each cycle
