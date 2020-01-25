@@ -2,6 +2,9 @@
  Wood Stove Regulator
  by Michael Buhidar (GitHub: buhidar)
 
+ with thanks to philco for many of the foundational ideas for this project
+ (https://www.instructables.com/id/Wood-Stove-Regulator/)
+
  System drives an Arduino microcontroller based system that auomatically 
  controls the air damper on a wood stove in order to maintain a 
  constant exhaust pipe temperature.  
@@ -29,6 +32,8 @@
      between the servo and the stove damper lever.
   3) Passive buzzer that provides an audible alert when wood needs to be added
      or when stove damper will be closed due to end of fire event.
+
+ 
      
 */
 
