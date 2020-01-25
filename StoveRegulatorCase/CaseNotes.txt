@@ -1,0 +1,16 @@
+3D Printed Case for Wood Stove Regulator
+
+Configuration is wall mounted case with Arduino ports facing downward,
+LCD screen centered vertically on the top case with control knobs below it.
+Control cable exits the case on the bottom of the case as mounted.
+
+Modeled using Autodesk Fusion 360 and printed using PLA filament.
+Case was modified from:
+Arduino-UNO-DIN-Case (6TE) (http://www.thingiverse.com/thing:3402441)
+Changes to case and other printed parts:
+- made bottom deeper to accommodate a breadboard shield for the Arduino
+- added support ribbing to the top case to improve print quality
+- changed holes and clamp in case to work with the push/pull cable and the thermocouple wire
+- added a support mounting surface for the thermocouple amplifier
+- added mounting pillars to support the servo inside the bottom case
+- added a new wall mount and a cable connection piece for the wood stove damper
