@@ -221,8 +221,16 @@ void loop() {
     lcd.print(messageDamp);
     // Serial Plotter
     Serial.print(round(damper/maxDamper * 100));
-    Serial.print(" ");
-    Serial.println(temperatureF);
+    Serial.print(",");
+    Serial.print(temperatureF);
+    Serial.print(",");
+    Serial.print(errP);
+    Serial.print(",");
+    Serial.print(errI);
+    Serial.print(",");
+    Serial.print(errD);
+    Serial.print(",");    
+    Serial.println();
 
     // Turn servo only for more than 2° delta
     diff = damper - oldDamper;
