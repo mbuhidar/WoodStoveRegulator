@@ -1,4 +1,4 @@
-# WoodStoveRegulator
+# WoodStoveRegulator - Arduino Powered Stove Damper Regulation
 
  System drives an Arduino microcontroller based device that auomatically 
  controls the air damper on a wood stove in order to maintain a 
