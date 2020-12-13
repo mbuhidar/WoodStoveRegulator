@@ -124,24 +124,20 @@ boolean closeBuzzer = true;
 boolean refillBuzzer = true;
 
 
-
-
 void setup() {
   Serial.begin(9600);  // opens serial port, sets data rate to 9600 bps
   myservo.attach(10);  // attach servo variable to pin 10
   // move servo from current angle to zero non-abruptly
-  ang = myservo.read();
+  int ang = myservo.read();
   for (int i = ang; i > 0; i--) {
     myservo.write(ang);
     delay(200);
+  }
   myservo.write(0);    // write 0 deg angle to servo after gradual move
   myservo.detach();    // detach servo variable from its pin
   lcd.begin(16, 2);    // initializes 1602 LCD screen for 16 columns and 2 rows
   pinMode(buzzerPort, OUTPUT); // configures buzzer pin as an output
 }
-
-
-
 
 void loop() {
 
@@ -166,9 +162,7 @@ void loop() {
       damper = round(pot * maxDamper / 100);  // scales damper setting according to max setting
       messageDamp = "Damper=" + String(damper) + "% Man";
     }
-
     else
-    
     { 
       if (errI < closeTrigger) {
         // Automatic PID regulation
@@ -255,18 +249,18 @@ void loop() {
       myservo.attach(10);
       if (diff > 2) {
         for (int i = 0; i < diff; i++) {
-            angle = (oldDamper + i + 1) * servoAngle / (maxDamper * servoCalibration) - servoOffset;
-            myservo.write(angle);
-            delay(200);
-          }
+          angle = (oldDamper + i + 1) * servoAngle / (maxDamper * servoCalibration) - servoOffset;
+          myservo.write(angle);
+          delay(200);
+        }
       }
       
       if (diff < 2) {
         for (int i = 0; i < abs(diff); i++) {
-            angle = (oldDamper - i - 1) * servoAngle / (maxDamper * servoCalibration) - servoOffset;
-            myservo.write(angle);
-            delay(200);
-          }
+          angle = (oldDamper - i - 1) * servoAngle / (maxDamper * servoCalibration) - servoOffset;
+          myservo.write(angle);
+          delay(200);
+        }
       }
           
       myservo.detach();
