@@ -1,6 +1,6 @@
 /*
  Wood Stove Regulator - Version 2.0
- by Michael Buhidar (GitHub: buhidar)
+ by Michael Buhidar (GitHub: mbuhidar)
 
  with thanks to philco for many of the foundational ideas for this project
  (https://www.instructables.com/id/Wood-Stove-Regulator/)
@@ -34,9 +34,6 @@
      between the servo and the stove damper lever.
   3) Passive buzzer that provides an audible alert when wood needs to be added
      or when stove damper will be closed due to end of fire event.
-
- 
-     
 */
 
 // Include libraries for max6675, servo, LCD, and math.
@@ -45,22 +42,20 @@
 #include <LiquidCrystal.h>
 #include <math.h>
 
-// Thermocouple pins mapping:
+// Thermocouple pin mapping variables and compensation error variable:
 int thermoCsPort = 6;               // CS pin on MAX6675; chip select
 int thermoSoPort = 7;               // SO pin of MAX6675; serial output
 int thermoSckkPort = 8;             // SCK pin of MAX6675; serial clock input
-
-// int units = 1;                      // Toggle for readout temp units (0 = ˚F, 1 = ˚C) 
 float error = 0.0;                  // Temperature compensation error
 
-// Buzzer variables:
-int buzzerPort = 9;                 // Buzzer port
-int buzzerRefillFrequency = 1900;   // Buzzer tone frequency for refill alarm
-int buzzerRefillRepeat = 3;         // Number of refill alarm tones
-int buzzerRefillDelay = 1000;       // Delay of refill alarm tone
-int buzzerCloseFrequency = 950;    // Buzzer tone frequency for end of fire damper close alarm
-int buzzerCloseRepeat = 2;          // Number of tones for end of fire damper close alarm
-int buzzerCloseDelay = 2000;        // Delay of tone for end of fire damper close alarm
+// Buzzer setup variables:
+int buzzerPort = 9;               // Buzzer port id
+int buzzerRefillFrequency = 1900; // Buzzer tone frequency for refill alarm
+int buzzerRefillRepeat = 3;       // Number of refill alarm tones
+int buzzerRefillDelay = 1000;     // Delay between refill alarm tones
+int buzzerEndFrequency = 950;     // Buzzer tone frequency for end of fire damper close alarm
+int buzzerEndRepeat = 2;          // Number of tones for end of fire damper close alarm
+int buzzerEndDelay = 2000;        // Delay of tone for end of fire damper close alarm
 
 // Potentiometer variables
 int servoPort = 0;
@@ -74,35 +69,37 @@ int lcdPort4 = 4;
 int lcdPort5 = 3;
 int lcdPort6 = 2;
 
-// Device objects
-Servo myservo;  // create servo object to control the servo
+// Device objects - create servo, therocouple, and lcd objects 
+Servo myservo;
 MAX6675 thermocouple(thermoSckkPort, thermoCsPort, thermoSoPort); 
-LiquidCrystal lcd(lcdPort1, lcdPort2, lcdPort3, lcdPort4, lcdPort5, lcdPort6);
+LiquidCrystal lcd(lcdPort1, lcdPort2, lcdPort3, lcdPort4, lcdPort5, lcdPort6); 
 
-// Servo settings
+// Servo calibration settings
 float servoCalibration = 1.0;  // 1.0 is neutral cal - adjust value so servo arm drives closed damper when damper variable equals 0 (0%)
 float servoOffset = 20;  // offset angle for servo angle adjustment
 float servoAngle = 100;  // adjust value to define total angular travel of servo so that cable drives damper from fully opened to fully closed
 
-// Regulation variables (Based on PID):
-// damper = kP * errP + kI * errI + kD * errD
-// errP = targetTempC - temperature
-// errI = errP integral
-// errD = errP derivative
-int temperature = 0;  // initialize temperature variable for C
-int temperatureF = 32; // initialize temperature variable for F - only used for display output
-float temperatureMin = 38; // under this temperature (38C = 100F), the regulation starts an integral measure to estimate end of fire and close the damper
-float targetTempC = 121.1; // the target temperature as measured by the thermocouple (121.1 C = 250 F)
-float errP = 0.0;
-float errD = 0.0;
-float errI = 0.0;
-float errOld = 0.0;
+/*
+  Note - regulation variables (Based on PID):
+      damper = kP * errP + kI * errI + kD * errD
+      errP = targetTempC - temperature
+      errI = errP integral
+      errD = errP derivative
+*/
+
+int temperature = 0;       // initialize temperature variable for C
+float temperatureMin = 38; // under this temperature (38C = 100F), the regulation closes the damper if end of fire conditions are met
+float targetTempC = 135; // the target temperature as measured by the thermocouple (135 C = 275 F)
+float errP = 0.0;          // initialize the proportional term
+float errD = 0.0;          // initialize the derivative term
+float errI = 0.0;          // initialize the integral term
+float errOld = 0.0;        // initialize term used to capture prior cycle ErrP
 float kP = 5;              // P coefficient of the PID regulation
 float kI = 0.0005;         // I coefficient of the PID regulation
 float kD = 0.00005;        // D coefficient of the PID regulation
 
-float refillTrigger = 5000;    // refillTrigger used to notify need of a wood refill
-float closeTrigger = 15000;    // closeTrigger used to close damper at end of combustion
+float refillTrigger = 5000;// refillTrigger used to notify need of a wood refill
+float endTrigger = 25000;  // closeTrigger used to close damper at end of combustion
 
 int pot = 0;
 int oldPot = 0;
@@ -117,54 +114,58 @@ float maxDamper = 100.0;  // Sets maximum damper setting
 float minDamper = 0.0;    // Sets minimum damper setting
 float zeroDamper = 0.0;   // Sets zero damper setting - note that stove allows some amount of airflow at zero damper
 
-String messageTemp; // Initialize message for temperature output
-String messageDamp; // Initialize message for damper setting output
+String messageTemp; // Initialize message for temperature output to lcd
+String messageDamp; // Initialize message for damper setting output to lcd
 
-boolean closeBuzzer = true;
+boolean endBuzzer = true;
 boolean refillBuzzer = true;
 
 
-void setup() {
-  Serial.begin(9600);  // opens serial port, sets data rate to 9600 bps
-  myservo.attach(10);  // attach servo variable to pin 10
-  // move servo from current angle to zero non-abruptly
-  int ang = myservo.read();
-  for (int i = ang; i > 0; i--) {
-    myservo.write(ang);
-    delay(200);
-  }
-  myservo.write(0);    // write 0 deg angle to servo after gradual move
-  myservo.detach();    // detach servo variable from its pin
-  lcd.begin(16, 2);    // initializes 1602 LCD screen for 16 columns and 2 rows
-  pinMode(buzzerPort, OUTPUT); // configures buzzer pin as an output
+
+// Utility function to convert temperature in C to F
+int tempF(int tempC){
+ return tempC * 9 / 5 + 32;
 }
 
+
+// arduino setup function
+void setup() {
+  Serial.begin(9600);  // opens serial port, sets data rate to 9600 bps
+  myservo.attach(10);  // attach servo object to pin 10
+  myservo.write(0);    // write 0 deg angle to servo object
+  myservo.detach();    // detach servo object from its pin
+  lcd.begin(16, 2);    // initializes 1602 lcd screen for 16 columns and 2 rows
+  pinMode(buzzerPort, OUTPUT); // configure buzzer pin as an output
+}
+
+
+
+// arduino loop function
 void loop() {
 
-  temperature = thermocouple.readCelsius();
-  temperatureF = temperature * 9 / 5 + 32;  // convert C to F
+  temperature = thermocouple.readCelsius();  // read thermocouple temp in C
   
   delay(500); 
   
   if (temperature == -1) {
-    Serial.println("Thermocouple Error!!"); // Temperature is read as -1 and there is a thermocouple error
+    Serial.println("Thermocouple Error."); // if temperature is read as -1 report a thermocouple error to serial output
   } else {
 
     pot = analogRead(potPort); // reads the value of the potentiometer (value between 0 and 1023)
     pot = map(pot, 0, potMax, 0, 105); // scale potentiometer reading to 0 to 105%; note that setting above 100% invokes automatic mode
     
     if (pot <= potRelMax ) {  
-      // Manual damper regulation mode
-      errI = 0;  // reset integral term
-      errD = 0;  // reset derivative term
-      closeBuzzer = true;
-      refillBuzzer = true;
+      // Manual damper regulation mode if potentiometer reads 100% or less
+      errI = 0;  // reset integral term based on user intent for manual control
+      errD = 0;  // reset derivative term based on user intent for manual control
+      endBuzzer = true;  // setting to disable end of fire buzzer
+      refillBuzzer = true;  //setting to disable refill buzzer
       damper = round(pot * maxDamper / 100);  // scales damper setting according to max setting
-      messageDamp = "Damper=" + String(damper) + "% Man";
+      messageDamp = "Damper=" + String(damper) + "% Man"; // set damper output message
     }
     else
     { 
-      if (errI < closeTrigger) {
+      if (errI < endTrigger) {
         // Automatic PID regulation
         errP = targetTempC - temperature;  // set proportional term
         errI = errI + errP;                // update integral term
@@ -175,14 +176,8 @@ void loop() {
         if (damper < minDamper) damper = minDamper;
         if (damper > maxDamper) damper = maxDamper;
 
-
-        // Close and end fire
-        // if (errI >= closeTrigger) errI = closeTrigger;
-        // 
-        if (temperature < temperatureMin) errI = 0;  // reset errI if temperature is higher than minimum cutoff temperature
-        // if (errI >= closeTrigger) damper = zeroDamper;
-
         messageDamp = "Damper=" + String(damper) + "% Auto";
+
         //Refill Alarm
         if (errI > refillTrigger) {
           messageDamp = "Damper=" + String(damper) + "% Fill";
@@ -196,26 +191,28 @@ void loop() {
             refillBuzzer = false;
           }
           if (temperature > targetTempC) {
-            errI = 0;
-            errD = 0;
-            refillBuzzer = true;
+            errI = 0;  // reset integral term after wood refill
+            errD = 0;  // reset derivative term after wood refill
+            refillBuzzer = true;  // reset buzzer toggle
           }
         }
 
       }
 
       else {
-        // Close Damper if end of combustion
+        // End of combustion condition for errI >= endTrigger
         messageDamp = "Damper=" + String(damper) + "% End";
-
-        if (closeBuzzer) {
-          for (int i = 0; i < buzzerCloseRepeat; i++) {
-            tone(buzzerPort, buzzerCloseFrequency);
-            delay(buzzerCloseDelay);
+        if (temperature < temperatureMin) {
+          damper = zeroDamper;
+        }
+        if (endBuzzer) {
+          for (int i = 0; i < buzzerEndRepeat; i++) {
+            tone(buzzerPort, buzzerEndFrequency);
+            delay(buzzerEndDelay);
             noTone(buzzerPort);
-            delay(buzzerCloseDelay);
+            delay(buzzerEndDelay);
           }
-          closeBuzzer = false;
+          endBuzzer = false;
         }
       }
     }
@@ -223,31 +220,19 @@ void loop() {
     // Display messages on LCD
     lcd.clear();
     lcd.setCursor(0, 0);
-    messageTemp = "Tmp=" + String(temperatureF) + "F" + " Pot=" + round(pot) + "%";
-    lcd.print(messageTemp);
-    lcd.setCursor(0, 1);
-    lcd.print(messageDamp);
+    messageTemp = "Tmp=" + String(tempF(temperature)) + "F" + " Pot=" + round(pot) + "%";
+    lcd.print(messageTemp);  // output temperature message to upper left quadrant of lcd
+    lcd.setCursor(0, 1);    
+    lcd.print(messageDamp);  // output damper message to upper right quadrant of lcd
 
-    // Serial Plotter
-    Serial.print(round(damper/maxDamper * 100));
-    Serial.print(",");
-    Serial.print(temperatureF);
-    Serial.print(",");
-    Serial.print(errP);
-    Serial.print(",");
-    Serial.print(errI);
-    Serial.print(",");
-    Serial.print(errD);
-    Serial.print(",");    
-    Serial.println();
 
-    // Turn servo only for more than 2° delta
+    // Drive servo and print damper position to the lcd
     diff = damper - oldDamper;
-    if (abs(diff) > 2) {
-      lcd.print(" x");
+    if (abs(diff) > 2) {  // move servo only if damper position change is more than 2%
+      lcd.print(" x");    // print x after damper message to indicate damper is actively changing
       delay(500);
       myservo.attach(10);
-      if (diff > 2) {
+      if (diff > 0) {  // action if damper should be opened
         for (int i = 0; i < diff; i++) {
           angle = (oldDamper + i + 1) * servoAngle / (maxDamper * servoCalibration) - servoOffset;
           myservo.write(angle);
@@ -255,7 +240,7 @@ void loop() {
         }
       }
       
-      if (diff < 2) {
+      if (diff < 0) {  // action if damper should be closed
         for (int i = 0; i < abs(diff); i++) {
           angle = (oldDamper - i - 1) * servoAngle / (maxDamper * servoCalibration) - servoOffset;
           myservo.write(angle);
@@ -267,7 +252,23 @@ void loop() {
 
       oldPot = pot;
       oldDamper =  damper;
+
     }
+
+    // Regulator model data via serial output
+    Serial.print(round(damper/maxDamper * 100));
+    Serial.print(",");
+    Serial.print(tempF(temperature));
+    Serial.print(",");
+    Serial.print(errP);
+    Serial.print(",");
+    Serial.print(errI);
+    Serial.print(",");
+    Serial.print(errD);
+    Serial.print(",");    
+    Serial.println();
+
     delay(4000);
+
   }
 }

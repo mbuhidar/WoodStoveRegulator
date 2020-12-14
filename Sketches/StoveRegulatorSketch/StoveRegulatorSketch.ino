@@ -171,7 +171,7 @@ void loop() {
         // Close and end fire
         // if (errI >= closeTrigger) errI = closeTrigger;
         // 
-        if (temperature < temperatureMin) errI = 0;  // reset errI if temperature is higher than minimum cutoff temperature
+        if (temperature > temperatureMin) errI = 0;  // reset errI if temperature is higher than minimum cutoff temperature
         // if (errI >= closeTrigger) damper = zeroDamper;
 
         messageDamp = "Damper=" + String(damper) + "% Auto";
