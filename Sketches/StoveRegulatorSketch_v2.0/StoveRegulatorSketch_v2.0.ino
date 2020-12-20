@@ -94,9 +94,9 @@ float errP = 0.0;          // initialize the proportional term
 float errD = 0.0;          // initialize the derivative term
 float errI = 0.0;          // initialize the integral term
 float errOld = 0.0;        // initialize term used to capture prior cycle ErrP
-float kP = 5;              // P coefficient of the PID regulation
-float kI = 0.0005;         // I coefficient of the PID regulation
-float kD = 0.00005;        // D coefficient of the PID regulation
+float kP = 4;              // P coefficient of the PID regulation (was 5)
+float kI = 0.005;         // I coefficient of the PID regulation (was 0.0005)
+float kD = 0.0005;        // D coefficient of the PID regulation (was 0.00005)
 
 float refillTrigger = 5000;// refillTrigger used to notify need of a wood refill
 float endTrigger = 25000;  // closeTrigger used to close damper at end of combustion
@@ -201,7 +201,15 @@ void loop() {
 
       else {
         // End of combustion condition for errI >= endTrigger
+
+        // Check if temp >= target temp (wood has been filled)
+        if (temperature >= targetTempC) {
+          errI = 0;  // reset integral term after wood refill
+          errD = 0;  // reset derivative term after wood refill
+        }
+
         messageDamp = "Damper=" + String(damper) + "% End";
+
         if (temperature < temperatureMin) {
           damper = zeroDamper;
         }
