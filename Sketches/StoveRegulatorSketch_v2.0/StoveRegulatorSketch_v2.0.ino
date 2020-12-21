@@ -95,8 +95,8 @@ float errD = 0.0;          // initialize the derivative term
 float errI = 0.0;          // initialize the integral term
 float errOld = 0.0;        // initialize term used to capture prior cycle ErrP
 float kP = 4;              // P coefficient of the PID regulation (was 5)
-float kI = 0.005;         // I coefficient of the PID regulation (was 0.0005)
-float kD = 0.0005;        // D coefficient of the PID regulation (was 0.00005)
+float kI = 0.001;          // I coefficient of the PID regulation (was 0.0005)
+float kD = 1.0;            // D coefficient of the PID regulation (was 0.00005)
 
 float refillTrigger = 5000;// refillTrigger used to notify need of a wood refill
 float endTrigger = 25000;  // closeTrigger used to close damper at end of combustion
