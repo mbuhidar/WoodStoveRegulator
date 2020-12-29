@@ -124,6 +124,7 @@ boolean refillBuzzer = true;
 
 int TempHist = {100, 100, 100, 100, 100, 100}; // Set temperature history array
 
+
 // Utility function to convert temperature in C to F
 int tempF(int tempC){
  return tempC * 9 / 5 + 32;
@@ -138,7 +139,7 @@ bool WoodFilled(int CurrentTemp) {
   }
   TempHist[0] = CurrentTemp;
 
-  if ((TempHist[0]+TempHist[1]+TempHist[2])/3 > (TempHist[4]+TempHist[5]+TempHist[6])/3) {
+  if (int((TempHist[0]+TempHist[1]+TempHist[2])/3) > int((TempHist[4]+TempHist[5]+TempHist[6])/3)) {
     return true;
   }
   return false;
@@ -188,6 +189,7 @@ void loop() {
         errI = errI + errP;                // update integral term
         errD = errP - errOld;              // update derivative term
         errOld = errP;
+        WoodFilled(temperature);  // Call function that checks if wood is refilled to update array
         // set damper position and limit damper values to physical constraints
         damper = kP * errP + kI * errI + kD * errD;
         if (damper < minDamper) damper = minDamper;
@@ -207,9 +209,8 @@ void loop() {
             }
             refillBuzzer = false;
           }
-          if (temperature > targetTempC) {
+          if (WoodFilled(temperature)) {
             errI = 0;  // reset integral term after wood refill
-            errD = 0;  // reset derivative term after wood refill
             refillBuzzer = true;  // reset buzzer toggle
           }
         }
@@ -220,9 +221,8 @@ void loop() {
         // End of combustion condition for errI >= endTrigger
 
         // Check if temp >= target temp (wood has been filled)
-        if (temperature >= targetTempC) {
+        if (WoodFilled(temperature)) {
           errI = 0;  // reset integral term after wood refill
-          errD = 0;  // reset derivative term after wood refill
         }
 
         messageDamp = "Damper=" + String(damper) + "% End";
