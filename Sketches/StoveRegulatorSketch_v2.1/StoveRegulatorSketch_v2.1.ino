@@ -122,7 +122,7 @@ String messageDamp; // Initialize message for damper setting output to lcd
 boolean endBuzzer = true;
 boolean refillBuzzer = true;
 
-int TempHist = {100, 100, 100, 100, 100, 100}; // Set temperature history array
+int TempHist[6] = {100, 100, 100, 100, 100, 100}; // Set temperature history array
 
 
 // Utility function to convert temperature in C to F
@@ -142,7 +142,9 @@ bool WoodFilled(int CurrentTemp) {
   if (int((TempHist[0]+TempHist[1]+TempHist[2])/3) > int((TempHist[4]+TempHist[5]+TempHist[6])/3)) {
     return true;
   }
-  return false;
+  else {
+    return false;
+  }
 }
 
 
@@ -163,14 +165,14 @@ void loop() {
 
   temperature = thermocouple.readCelsius();  // read thermocouple temp in C
   
-  delay(500); // allow half second for sensor read
+  delay(1000); // allow one second for sensor read and settle
   
   if (temperature == -1) {
     Serial.println("Thermocouple Error."); // if temperature is read as -1 report a thermocouple error to serial output
   } else {
 
     pot = analogRead(potPort); // reads the value of the potentiometer (value between 0 and 1023)
-    pot = map(pot, 0, potMax, 0, 105); // scale potentiometer reading to 0 to 105%; note that setting above 100% invokes automatic mode
+    pot = map(pot, 0, potMax, 0, 102); // scale potentiometer reading to 0 to 102%; note that setting above 100% invokes automatic mode
     
     if (pot <= potRelMax ) {  
       // Manual damper regulation mode if potentiometer reads 100% or less
@@ -190,6 +192,7 @@ void loop() {
         errD = errP - errOld;              // update derivative term
         errOld = errP;
         WoodFilled(temperature);  // Call function that checks if wood is refilled to update array
+
         // set damper position and limit damper values to physical constraints
         damper = kP * errP + kI * errI + kD * errD;
         if (damper < minDamper) damper = minDamper;
@@ -220,7 +223,7 @@ void loop() {
       else {
         // End of combustion condition for errI >= endTrigger
 
-        // Check if temp >= target temp (wood has been filled)
+        // Check if wood has been added
         if (WoodFilled(temperature)) {
           errI = 0;  // reset integral term after wood refill
         }
@@ -257,7 +260,7 @@ void loop() {
       lcd.print(" x");    // print x after damper message to indicate damper is actively changing
       delay(500);
       myservo.attach(10);
-      if (diff > 0) {  // action if damper should be opened
+      if (diff > 0) {  // action if damper should be moved in the opened direction
         for (int i = 0; i < diff; i++) {
           angle = (oldDamper + i + 1) * servoAngle / (maxDamper * servoCalibration) - servoOffset;
           myservo.write(angle);
@@ -265,7 +268,7 @@ void loop() {
         }
       }
       
-      if (diff < 0) {  // action if damper should be closed
+      if (diff < 0) {  // action if damper should be moved in the closed direction
         for (int i = 0; i < abs(diff); i++) {
           angle = (oldDamper - i - 1) * servoAngle / (maxDamper * servoCalibration) - servoOffset;
           myservo.write(angle);
@@ -281,19 +284,21 @@ void loop() {
     }
 
     // Regulator model data via serial output
-    // Output: tempF, tempC, damper%, damperP, damperI, damperD, errP, errI, errD
+    // Output: tempC, tempF, damper%, damper(calculated), damperP, damperI, damperD, errP, errI, errD
 
-    Serial.print(tempF(temperature));
-    Serial.print(",");
     Serial.print(temperature);
     Serial.print(",");
-    Serial.print(round(damper/maxDamper * 100));
+    Serial.print(tempF(temperature));
     Serial.print(",");
-    Serial.print(round((kP*errP)/maxDamper)*100);
+    Serial.print(round(damper));
     Serial.print(",");
-    Serial.print(round((kI*errI)/maxDamper)*100);
+    Serial.print(round(kP*errP + kI*errI + kD+errD));
     Serial.print(",");
-    Serial.print(round((kD*errD)/maxDamper)*100);
+    Serial.print(round(kP*errP));
+    Serial.print(",");
+    Serial.print(round(kI*errI));
+    Serial.print(",");
+    Serial.print(round(kD*errD));
     Serial.print(",");  
     Serial.print(errP);
     Serial.print(",");
