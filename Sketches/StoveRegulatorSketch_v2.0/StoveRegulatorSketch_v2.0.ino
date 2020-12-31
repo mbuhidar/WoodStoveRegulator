@@ -1,8 +1,22 @@
 /*
  Wood Stove Regulator - Version 2.0
- by Michael Buhidar (GitHub: mbuhidar)
+ Copyright (C) 2020  Michael Buhidar (GitHub: mbuhidar)
+ 
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ any later version.
+ 
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ 
+ For a copy of the GNU General Public License, 
+ see <https://www.gnu.org/licenses/>.
 
- with thanks to philco for many of the foundational ideas for this project
+
+ With thanks to philco for many of the foundational ideas for this project
  (https://www.instructables.com/id/Wood-Stove-Regulator/)
 
  Sketch drives an Arduino microcontroller based system that auomatically 
