@@ -1,6 +1,6 @@
 # WoodStoveRegulator - Arduino Powered Stove Damper Regulation
 
- System drives an Arduino microcontroller based device that auomatically 
+ System drives an Arduino microcontroller based device that automatically 
  controls the air damper on a wood stove in order to maintain a 
  constant exhaust pipe temperature.  
  
@@ -10,8 +10,8 @@
   d-ring end connected to Arduino via MAX6675 module.
   2) A variable knob that controls LCD brightness (10K potentiometer).
   3) A variable knob that manually controls the stove damper 
-  position between 0% and 99% and places the control system in 
-  automatic mode at potentiometer setting of 100% (10K potentiometer). 
+  position between 0% and 100% and places the control system in 
+  automatic mode at potentiometer setting above 100% (10K potentiometer). 
  System outputs:
   1) LCD display showing:
      a) Exhaust pipe temperature on 1st line of LCD.
