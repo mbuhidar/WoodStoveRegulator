@@ -1,5 +1,5 @@
 /*
- Wood Stove Regulator - Version 2.1
+ Wood Stove Regulator - Version 2.2
  Copyright (C) 2020  Michael Buhidar (GitHub: mbuhidar)
  
  This program is free software: you can redistribute it and/or modify
@@ -117,6 +117,7 @@ float kD = kP/tauD;        // D coefficient of the PID regulation
 float refillTrigger = 5000;// refillTrigger used to notify need of a wood refill
 float endTrigger = 25000;  // closeTrigger used to close damper at end of combustion
 
+int pot_raw = 0;
 int pot = 0;
 int oldPot = 0;
 float potMax = 1023.0;   // Potentiometer calibration
@@ -130,13 +131,14 @@ float maxDamper = 100.0;  // Sets maximum damper setting
 float minDamper = 0.0;    // Sets minimum damper setting
 float zeroDamper = 0.0;   // Sets zero damper setting - note that stove allows some amount of airflow at zero damper
 
-String messageTemp; // Initialize message for temperature output to lcd
-String messageDamp; // Initialize message for damper setting output to lcd
+String messageTemp;    // Initialize message for temperature line output to lcd
+String messageDamp;    // Initialize message for damper line output to lcd
 
-boolean endBuzzer = true;
-boolean refillBuzzer = true;
+bool endBuzzer = true;
+bool refillBuzzer = true;
+bool oddLoop = true;
 
-int TempHist[6] = {100, 100, 100, 100, 100, 100}; // Set temperature history array
+int TempHist[6] = {0, 0, 0, 0, 0, 0}; // Set temperature history array
 
 
 // Utility function to convert temperature in C to F
@@ -153,7 +155,7 @@ bool WoodFilled(int CurrentTemp) {
   }
   TempHist[0] = CurrentTemp;
 
-  if (int((TempHist[0]+TempHist[1]+TempHist[2])/3) > int((TempHist[4]+TempHist[5]+TempHist[6])/3)) {
+  if (float((TempHist[0]+TempHist[1]+TempHist[2])/3.0) > float((TempHist[4]+TempHist[5]+TempHist[6])/3.0)) {
     return true;
   }
   else {
@@ -185,8 +187,15 @@ void loop() {
     Serial.println("Thermocouple Error."); // if temperature is read as -1 report a thermocouple error to serial output
   } else {
 
-    pot = analogRead(potPort); // reads the value of the potentiometer (value between 0 and 1023)
-    pot = map(pot, 0, potMax, 0, 200); // scale potentiometer reading to 0 to 200%; note that setting above 100% invokes automatic mode
+    pot_raw = analogRead(potPort); // reads the value of the potentiometer (value between 0 and 1023)
+
+    /* scale potentiometer reading to 0 to 200%; note that setting above 100% invokes automatic mode.
+       Until another pysical input can be added to the unit, the pot range from 100-200% will be used 
+       for setting target temp
+    */
+    pot = map(pot_raw, 0, potMax, 0, 200);
+    targetTempC = map(pot, 100, 200, 100, 200);  // Maps pot % range to target temp range of 212 to 392 F
+    targetTempC = constrain(targetTempC, 100, 200);  // Limit target temp to specified range
     
     if (pot <= potRelMax ) {  
       // Manual damper regulation mode if potentiometer reads 100% or less
@@ -195,7 +204,7 @@ void loop() {
       endBuzzer = true;  // setting to disable end of fire buzzer
       refillBuzzer = true;  //setting to disable refill buzzer
       damper = round(pot * maxDamper / 100);  // scales damper setting according to max setting
-      messageDamp = "Damper=" + String(damper) + "% Man"; // set damper output message
+      messageDamp = "Dmp " + String(damper) + "%    Man "; // set damper output message, manual
     }
     else
     { 
@@ -212,11 +221,11 @@ void loop() {
         if (damper < minDamper) damper = minDamper;
         if (damper > maxDamper) damper = maxDamper;
 
-        messageDamp = "Damper=" + String(damper) + "% Auto";
+        messageDamp = "Dmp " + String(damper) + "%   Auto "; // set damper output message, auto
 
         //Refill Alarm
         if (errI > refillTrigger) {
-          messageDamp = "Damper=" + String(damper) + "% Fill";
+          messageDamp = "Dmp " + String(damper) + "%   Fill "; // set damper output message, fill
           if (refillBuzzer) {
             for (int i = 0; i < buzzerRefillRepeat; i++) {
               tone(buzzerPort, buzzerRefillFrequency);
@@ -237,12 +246,7 @@ void loop() {
       else {
         // End of combustion condition for errI >= endTrigger
 
-        // Check if wood has been added
-        if (WoodFilled(temperature)) {
-          errI = 0;  // reset integral term after wood refill
-        }
-
-        messageDamp = "Damper=" + String(damper) + "% End";
+        messageDamp = "Dmp " + String(damper) + "%    End "; // set damper output message, end
 
         if (temperature < temperatureMin) {
           damper = zeroDamper;
@@ -256,22 +260,42 @@ void loop() {
           }
           endBuzzer = false;
         }
+        // Check if wood has been added and reset errI if so
+        if (WoodFilled(temperature)) {
+          errI = 0;  // reset integral term after wood refill
+        }
       }
     }
 
-    // Display messages on LCD
+    // Display messages on 16X2 LCD
+    /*
+    0123456789ABCDEF
+    Tmp=XXXF Pot=XXX%  - line 1, original message
+    Damper=XX% Auto x  - line 2, original message
+
+    0123456789ABCDEF
+    Temp XXXF / XXXF  - line 1, actual temp / target temp
+    Dmp XXX% Pot XXX  - line 2, rotating message A 
+    Dmp XXX%  Auto x  - line 2, rotating message B 
+
+    */
     lcd.clear();
     lcd.setCursor(0, 0);
-    messageTemp = "Tmp=" + String(tempF(temperature)) + "F" + " Pot=" + round(pot) + "%";
+    messageTemp = "Temp " + String(tempF(temperature)) + "F / " + String(tempF(targetTempC)) + "F";
+    if (oddLoop) {
+      messageDamp = "Dmp " + String(damper) + "% Pot " + round(pot); // set alt damper output message
+    }
     lcd.print(messageTemp);  // output temperature message to upper left quadrant of lcd
-    lcd.setCursor(0, 1);    
+    lcd.setCursor(0, 1);
     lcd.print(messageDamp);  // output damper message to upper right quadrant of lcd
 
 
     // Drive servo and print damper position to the lcd
     diff = damper - oldDamper;
     if (abs(diff) > 2) {  // move servo only if damper position change is more than 2%
-      lcd.print(" x");    // print x after damper message to indicate damper is actively changing
+      if (!oddLoop) {
+        lcd.print("x");   // print x after damper message to indicate active movement
+      }
       delay(500);
       myservo.attach(10);
       if (diff > 0) {  // action if damper should be moved in the opened direction
@@ -322,7 +346,8 @@ void loop() {
     Serial.print(",");    
     Serial.println();
 
-
+    // Toggle oddLoop that controls display message on line 2
+    oddLoop = !oddLoop;
     // Delay between loop cycles
     delay(4000);
 
