@@ -155,7 +155,7 @@ bool WoodFilled(int CurrentTemp) {
   }
   TempHist[0] = CurrentTemp;
 
-  if (float((TempHist[0]+TempHist[1]+TempHist[2])/3.0) > float((TempHist[4]+TempHist[5]+TempHist[6])/3.0)) {
+  if (float((TempHist[0]+TempHist[1]+TempHist[2])/3.0) > float((TempHist[3]+TempHist[4]+TempHist[5])/3.0)) {
     return true;
   }
   else {
@@ -206,8 +206,7 @@ void loop() {
       damper = round(pot * maxDamper / 100);  // scales damper setting according to max setting
       messageDamp = "Dmp " + String(damper) + "%    Man "; // set damper output message, manual
     }
-    else
-    { 
+    else { 
       if (errI < endTrigger) {
         // Automatic PID regulation
         errP = targetTempC - temperature;  // set proportional term
