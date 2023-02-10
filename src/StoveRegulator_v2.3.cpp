@@ -84,7 +84,7 @@ int lcdPort4 = 4;
 int lcdPort5 = 3;
 int lcdPort6 = 2;
 
-// Device objects - create servo, therocouple, and lcd objects 
+// Device objects - create servo, thermocouple, and lcd objects 
 Servo myservo;
 MAX6675 thermocouple(thermoSckkPort, thermoCsPort, thermoSoPort); 
 LiquidCrystal lcd(lcdPort1, lcdPort2, lcdPort3, lcdPort4, lcdPort5, lcdPort6); 
