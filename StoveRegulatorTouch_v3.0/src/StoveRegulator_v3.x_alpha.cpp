@@ -160,6 +160,16 @@ float zeroDamper = 0.0;   // Sets zero damper setting - note that stove allows s
  // Set temperature history array
 int TempHist[6] = {0, 0, 0, 0, 0, 0};
 
+// NOTE : Below is a String used to add to the data sent to the Nextion Display
+//        and to verify the end of the string for incoming data.
+
+String endChar = String(char(0xff)) + String(char(0xff)) + String(char(0xff));
+String dfd  = ""; // data from display
+
+// NOTE : Initial Async Delay 
+unsigned long time_now = 0; // NOTE : 4,294,967,295
+int	period = 3000;
+
 // ****************************************************************************
 // Function definitions:
 // ****************************************************************************
@@ -206,10 +216,39 @@ void setup() {
 
 void loop() {
 
-  temperature = thermocouple.readCelsius();  // read thermocouple temp in C
+// Read the temperature from the thermocouple and convert to F
+
+// NOTE : ASYNC DELAY - 220ms for max6675 readCelsius() function
+  if(millis() - time_now > 220){ // guards aginst millis() overflow
+    time_now = millis();
+    temperature = thermocouple.readCelsius();
+  }
   
-  delay(1000); // allow one second for sensor read and settle
-  
+// ****************************************************************************  
+// Check for and capture command and value sent from the touch screen
+// ****************************************************************************
+
+  dfd += char(Serial2.read());
+  // NOTE : COMMAND is 4 characters after C:C
+  // NOTE : RESET dfd if THREE characters received and not C:C
+  if(dfd.length()>3 && dfd.substring(0,3)!="C:C") dfd="";
+  else{
+    // NOTE : If string ends in C?C then command completed
+    if(dfd.substring((dfd.length()-3),dfd.length()) == "C?C"){
+      // NOTE : Get the command
+      String command = dfd.substring(3,7);
+      // NOTE : Get the value(int or string)
+      String value = dfd.substring(7,dfd.length()-3);
+      // NOTE : FOR TESTING
+      Serial.println(command + " : " + value);
+      dfd="";
+    }
+  }
+
+
+
+
+
   if (temperature == -1) {
     Serial.println("Thermocouple Error."); // report a thermocouple error
   } else {
