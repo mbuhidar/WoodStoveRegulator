@@ -114,9 +114,9 @@ float servoOffset = 20;
 float servoAngle = 100;
 
 // Temperature variables: 
-int temperature = 0;       // initialize temperature variable for C
-int temperatureMin = 38; // under this temperature (38C = 100F), the regulation closes the damper if end of fire conditions are met
-int targetTempC = 135;   // the target temperature as measured by the thermocouple (135 C = 275 F)
+int tempF = 32;       // initialize temperature variable (32F = 0C)
+int tempFMin = 100; // under this temperature (100F = 38C), the regulation closes the damper if end of fire conditions are met
+int targetTempF = 275;   // the target temperature as measured by the thermocouple (275F = 135C)
 
 // PID regulation variables:
 float errP = 0.0;          // initialize the proportional term
@@ -133,13 +133,7 @@ float kD = kP/tauD;        // D coefficient of the PID regulation
 // refillTrigger used to notify need of a wood refill
 //float refillTrigger = 5000;
 // closeTrigger used to close damper at end of combustion
-//float endTrigger = 25000;
-
-//int pot_raw = 0;
-//int pot = 0;
-//int oldPot = 0;
-//float potMax = 1023.0;   // Potentiometer calibration
-//int potRelMax = 100;     // Potentiometer value above which the regulator runs in automatic mode
+float endTrigger = 25000;
 
 // Damper variables:
 int angle = 0;
@@ -165,29 +159,26 @@ int TempHist[6] = {0, 0, 0, 0, 0, 0};
 
 String endChar = String(char(0xff)) + String(char(0xff)) + String(char(0xff));
 String dfd  = ""; // data from display
+String command = ""; // command from display
+String cmd_value = ""; // value from display
 
 // NOTE : Initial Async Delay 
-unsigned long time_now = 0; // NOTE : 4,294,967,295
+unsigned long last_millis = 0; // NOTE : 4,294,967,295
 int	period = 3000;
 
 // ****************************************************************************
 // Function definitions:
 // ****************************************************************************
 
-// Utility function to convert temperature in C to F
-int tempF(int tempC){
- return tempC * 9 / 5 + 32;
-}
-
 // Utility function to check if wood has been filled and stove is building temp towards set point temp
 // Returns 'true' for refilled and temperature climbing or 'false' for temperature falling
-bool WoodFilled(int CurrentTemp) {
+bool woodFilled(int currentTemp) {
   for (int i = 5; i > 0; i--) {
-    TempHist[i] = TempHist[i-1];
+    tempHist[i] = tempHist[i-1];
   }
-  TempHist[0] = CurrentTemp;
+  tempHist[0] = currentTemp;
 
-  if (float((TempHist[0]+TempHist[1]+TempHist[2])/3.0) > float((TempHist[3]+TempHist[4]+TempHist[5])/3.0)) {
+  if (float((tempHist[0]+tempHist[1]+tempHist[2])/3.0) > float((tempHist[3]+tempHist[4]+tempHist[5])/3.0)) {
     return true;
   }
   else {
@@ -216,13 +207,16 @@ void setup() {
 
 void loop() {
 
-// Read the temperature from the thermocouple and convert to F
+// Read the temperature from the thermocouple in degrees F 
 
 // NOTE : ASYNC DELAY - 220ms for max6675 readCelsius() function
-  if(millis() - time_now > 220){ // guards aginst millis() overflow
-    time_now = millis();
-    temperature = thermocouple.readCelsius();
+  if((millis() - last_millis) > 220){ // guards aginst millis() overflow
+    tempF = thermocouple.readFahrenheit();
+    if (isnan(tempF)){
+      Serial.println("Thermocouple Error."); // report a thermocouple error
+    }
   }
+  last_millis = millis();
   
 // ****************************************************************************  
 // Check for and capture command and value sent from the touch screen
@@ -236,187 +230,137 @@ void loop() {
     // NOTE : If string ends in C?C then command completed
     if(dfd.substring((dfd.length()-3),dfd.length()) == "C?C"){
       // NOTE : Get the command
-      String command = dfd.substring(3,7);
+      command = dfd.substring(3,7);
       // NOTE : Get the value(int or string)
-      String value = dfd.substring(7,dfd.length()-3);
-      // NOTE : FOR TESTING
-      Serial.println(command + " : " + value);
+      cmd_value = dfd.substring(7,dfd.length()-3);
+      // Set target temp based on display input
+      if(command == "TARG"){
+        targetTempF = cmd_value.toInt();
+        // Write temperature to Nextion display auto page
+        Serial2.print("auto_page.n2.val=" + String(tempF) + endChar);
+      }
       dfd="";
     }
   }
 
-
-
-
-
-  if (temperature == -1) {
-    Serial.println("Thermocouple Error."); // report a thermocouple error
-  } else {
-
-    pot_raw = analogRead(potPort); // reads the value of the potentiometer (value between 0 and 1023)
-
-    /* scale potentiometer reading to 0 to 200%; note that setting above 100% invokes automatic mode.
-       Until another pysical input can be added to the unit, the pot range from 100-200% will be used 
-       for setting target temp
-    */
-    
-    targetTempC = map(pot, 100, 200, 100, 200);  // Maps pot % range to target temp range of 212 to 392 F
-    targetTempC = constrain(targetTempC, 100, 200);  // Limit target temp to specified range
-    
-    if (pot <= potRelMax ) {  
-      // Manual damper regulation mode if potentiometer reads 100% or less
-      errI = 0;  // reset integral term based on user intent for manual control
-      errD = 0;  // reset derivative term based on user intent for manual control
-      endBuzzer = true;  // setting to disable end of fire buzzer
-      refillBuzzer = true;  //setting to disable refill buzzer
-      damper = round(pot * maxDamper / 100);  // scales damper setting according to max setting
-      messageDamp = "Dmp " + String(damper) + "%    Man "; // set damper output message, manual
-    }
-    else { 
-      if (errI < endTrigger) {
-        // Automatic PID regulation
-        errP = targetTempC - temperature;  // set proportional term
-        errI = errI + errP;                // update integral term
-        errD = errP - errOld;              // update derivative term
-        errOld = errP;
-        WoodFilled(temperature);  // Call function that checks if wood is refilled to update array
-
-        // set damper position and limit damper values to physical constraints
-        damper = kP * errP + kI * errI + kD * errD;
-        if (damper < minDamper) damper = minDamper;
-        if (damper > maxDamper) damper = maxDamper;
-
-        messageDamp = "Dmp " + String(damper) + "%   Auto "; // set damper output message, auto
-
-        //Refill Alarm
-        if (errI > refillTrigger) {
-          messageDamp = "Dmp " + String(damper) + "%   Fill "; // set damper output message, fill
-          if (refillBuzzer) {
-            for (int i = 0; i < buzzerRefillRepeat; i++) {
-              tone(buzzerPort, buzzerRefillFrequency);
-              delay(buzzerRefillDelay);
-              noTone(buzzerPort);
-              delay(buzzerRefillDelay);
-            }
-            refillBuzzer = false;
-          }
-          if (WoodFilled(temperature)) {
-            errI = 0;  // reset integral term after wood refill
-            refillBuzzer = true;  // reset buzzer toggle
-          }
-        }
-
-      }
-
-      else {
-        // End of combustion condition for errI >= endTrigger
-
-        messageDamp = "Dmp " + String(damper) + "%    End "; // set damper output message, end
-
-        if (temperature < temperatureMin) {
-          damper = zeroDamper;
-        }
-        if (endBuzzer) {
-          for (int i = 0; i < buzzerEndRepeat; i++) {
-            tone(buzzerPort, buzzerEndFrequency);
-            delay(buzzerEndDelay);
-            noTone(buzzerPort);
-            delay(buzzerEndDelay);
-          }
-          endBuzzer = false;
-        }
-        // Check if wood has been added and reset errI if so
-        if (WoodFilled(temperature)) {
-          errI = 0;  // reset integral term after wood refill
-        }
-      }
-    }
-
-    // Display messages on 16X2 LCD
-    /*
-    Old message format:
-    0123456789ABCDEF
-    Tmp=XXXF Pot=XXX%  - line 1, original message
-    Damper=XX% Auto x  - line 2, original message
-
-    Current message format:
-    0123456789ABCDEF
-    Temp XXXF / XXXF  - line 1, actual temp / target temp
-    Dmp XXX% Pot XXX  - line 2, rotating message A 
-    Dmp XXX%  Auto x  - line 2, rotating message B 
-
-    */
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    messageTemp = "Temp " + String(tempF(temperature)) + "F / " + String(tempF(targetTempC)) + "F";
-    if (oddLoop) {
-      messageDamp = "Dmp " + String(damper) + "% Pot " + round(pot); // set alt damper output message
-    }
-    lcd.print(messageTemp);  // output temperature message to upper left quadrant of lcd
-    lcd.setCursor(0, 1);
-    lcd.print(messageDamp);  // output damper message to upper right quadrant of lcd
-
-
-    // Drive servo and print damper position to the lcd
-    diff = damper - oldDamper;
-    if (abs(diff) > 2) {  // move servo only if damper position change is more than 2%
-      if (!oddLoop) {
-        lcd.print("x");   // print x after damper message to indicate active movement
-      }
-      delay(500);
-      myservo.attach(10);
-      if (diff > 0) {  // action if damper should be moved in the opened direction
-        for (int i = 0; i < diff; i++) {
-          angle = (oldDamper + i + 1) * servoAngle / (maxDamper * servoCalibration) - servoOffset;
-          myservo.write(angle);
-          delay(200);
-        }
-      }
-      
-      if (diff < 0) {  // action if damper should be moved in the closed direction
-        for (int i = 0; i < abs(diff); i++) {
-          angle = (oldDamper - i - 1) * servoAngle / (maxDamper * servoCalibration) - servoOffset;
-          myservo.write(angle);
-          delay(200);
-        }
-      }
-          
-      myservo.detach();
-
-      oldPot = pot;
-      oldDamper =  damper;
-
-    }
-
-    // Regulator model data via serial output
-    // Output: tempC, tempF, damper%, damper(calculated), damperP, damperI, damperD, errP, errI, errD
-
-    Serial.print(temperature);
-    Serial.print(",");
-    Serial.print(tempF(temperature));
-    Serial.print(",");
-    Serial.print(round(damper));
-    Serial.print(",");
-    Serial.print(round(kP*errP + kI*errI + kD+errD));
-    Serial.print(",");
-    Serial.print(round(kP*errP));
-    Serial.print(",");
-    Serial.print(round(kI*errI));
-    Serial.print(",");
-    Serial.print(round(kD*errD));
-    Serial.print(",");  
-    Serial.print(errP);
-    Serial.print(",");
-    Serial.print(errI);
-    Serial.print(",");
-    Serial.print(errD);
-    Serial.print(",");    
-    Serial.println();
-
-    // Toggle oddLoop that controls display message on line 2
-    oddLoop = !oddLoop;
-    // Delay between loop cycles
-    delay(4000);
-
+  if (command == "DAMP") {  
+    // Manual damper regulation mode
+    errI = 0;  // reset integral term based on user intent for manual control
+    errD = 0;  // reset derivative term based on user intent for manual control
+    //endBuzzer = true;  // setting to disable end of fire buzzer
+    //refillBuzzer = true;  //setting to disable refill buzzer
+    damper = cmd_value.toInt();  // scales damper setting according to max setting
+    // Write temperature to Nextion display manual page
+    Serial2.print("man_page.n2.val=" + String(tempF) + endChar);
   }
+  else { 
+    if (errI < endTrigger) {
+      // Automatic PID regulation
+      errP = targetTempF - tempF;        // set proportional term
+      errI = errI + errP;                // update integral term
+      errD = errP - errOld;              // update derivative term
+      errOld = errP;
+      // Call function that checks if wood is refilled to update array
+      woodFilled(tempF);
+
+      // set damper position and limit damper values to physical constraints
+      damper = kP * errP + kI * errI + kD * errD;
+      if (damper < minDamper) damper = minDamper;
+      if (damper > maxDamper) damper = maxDamper;
+
+      // Send damper position to Nextion display
+      Serial2.print("auto_page.n1.val=46" + endChar);
+
+      //Refill Alarm
+      //if (errI > refillTrigger) {
+      //  messageDamp = "Dmp " + String(damper) + "%   Fill "; // set damper output message, fill
+      //  if (refillBuzzer) {
+      //    for (int i = 0; i < buzzerRefillRepeat; i++) {
+      //      tone(buzzerPort, buzzerRefillFrequency);
+      //      delay(buzzerRefillDelay);
+      //      noTone(buzzerPort);
+      //      delay(buzzerRefillDelay);
+      //    }
+      //    refillBuzzer = false;
+      //  }
+      //  if (woodFilled(tempF)) {
+      //    errI = 0;  // reset integral term after wood refill
+      //    refillBuzzer = true;  // reset buzzer toggle
+      //  }
+      }
+
+    else {
+      // End of combustion condition for errI >= endTrigger
+
+      //messageDamp = "Dmp " + String(damper) + "%    End "; // set damper output message, end
+
+      if (tempF < tempFMin) {
+        damper = zeroDamper;
+      }
+      //if (endBuzzer) {
+      //  for (int i = 0; i < buzzerEndRepeat; i++) {
+      //    tone(buzzerPort, buzzerEndFrequency);
+      //    delay(buzzerEndDelay);
+      //    noTone(buzzerPort);
+      //    delay(buzzerEndDelay);
+      //  }
+      //  endBuzzer = false;
+      //}
+
+      // Check if wood has been added and reset errI if so
+      if (woodFilled(tempF)) {
+        errI = 0;  // reset integral term after wood refill
+      }
+    }
+
+  // Drive servo and print damper position to the lcd
+  diff = damper - oldDamper;
+  if (abs(diff) > 2) {  // move servo only if damper position change is more than 2%
+    delay(500);
+    myservo.attach(10);
+    if (diff > 0) {  // action if damper should be moved in the opened direction
+      for (int i = 0; i < diff; i++) {
+        angle = (oldDamper + i + 1) * servoAngle / (maxDamper * servoCalibration) - servoOffset;
+        myservo.write(angle);
+        // Send damper angle to Nextion display
+        Serial2.print("auto_page.n1.val=" + String(angle) + endChar);
+        delay(200);
+      }
+    }
+    if (diff < 0) {  // action if damper should be moved in the closed direction
+      for (int i = 0; i < abs(diff); i++) {
+        angle = (oldDamper - i - 1) * servoAngle / (maxDamper * servoCalibration) - servoOffset;
+        myservo.write(angle);
+        // Send damper angle to Nextion display
+        Serial2.print("auto_page.n1.val=" + String(angle) + endChar);
+        delay(200);
+      }
+    }
+    myservo.detach();
+    oldDamper =  damper;
+  }
+
+  // Regulator model data via serial output
+  // Output: tempF, damper%, damper(calculated), damperP, damperI, damperD, errP, errI, errD
+
+  Serial.print(tempF);
+  Serial.print(",");
+  Serial.print(round(damper));
+  Serial.print(",");
+  Serial.print(round(kP*errP + kI*errI + kD+errD));
+  Serial.print(",");
+  Serial.print(round(kP*errP));
+  Serial.print(",");
+  Serial.print(round(kI*errI));
+  Serial.print(",");
+  Serial.print(round(kD*errD));
+  Serial.print(",");  
+  Serial.print(errP);
+  Serial.print(",");
+  Serial.print(errI);
+  Serial.print(",");
+  Serial.print(errD);
+  Serial.print(",");    
+  Serial.println();
+
 }
