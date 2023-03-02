@@ -110,10 +110,10 @@ MAX6675 thermocouple(thermoSckkPort, thermoCsPort, thermoSoPort);
 // arm drives closed damper when damper variable equals 0 (0%)
 float servoCalibration = 1.0;
 // offset angle for servo angle adjustment
-int servoOffset = -20;
+float servoOffset = -20;
 // adjust value to define total angular travel of servo so that cable drives
 // damper from fully opened to fully closed
-int servoRange = 100;
+float servoRange = 100;
 
 // Temperature variables:       
 // Initialize temperature variable (50F = 10C)
@@ -130,8 +130,8 @@ float errD = 0.0;          // initialize the derivative term
 float errI = 0.0;          // initialize the integral term
 float errOld = 0.0;        // initialize term used to capture prior cycle ErrP
 float kP = 5.0;            // P coefficient of the PID regulation
-int tauI = 1000;           // Integral time constant (sec/repeat)
-int tauD = 5;              // Derivative time constant (sec/reapeat)
+float tauI = 1000;           // Integral time constant (sec/repeat)
+float tauD = 5;              // Derivative time constant (sec/reapeat)
 float kI = kP/tauI;        // I coefficient of the PID regulation
 float kD = kP/tauD;        // D coefficient of the PID regulation
 
@@ -139,7 +139,7 @@ float kD = kP/tauD;        // D coefficient of the PID regulation
 // refillTrigger used to notify need of a wood refill
 //float refillTrigger = 5000;
 // closeTrigger used to close damper at end of combustion
-int endTrigger = 25000;
+float endTrigger = 25000;
 
 // Damper variables:
 int angle = 0;
@@ -147,16 +147,16 @@ int damper = 0;
 int targetDamper = 0;
 int dampIncr = 0;
 int diff = 0;
-int maxDamper = 100;  // Sets maximum damper setting
-int minDamper = 0;    // Sets minimum damper setting
-int zeroDamper = 0;   // Sets zero damper setting
+float maxDamper = 100;  // Sets maximum damper setting
+float minDamper = 0.0;    // Sets minimum damper setting
+float zeroDamper = 0.0;   // Sets zero damper setting
 // Note that stove allows some amount of airflow at zero damper
 
 //bool endBuzzer = true;
 //bool refillBuzzer = true;
 
  // Setup temperature history array
-int tempHist[6] = {0, 0, 0, 0, 0, 0};
+float tempHist[6] = {0, 0, 0, 0, 0, 0};
 
 // NOTE : String used to add end chars to the data sent to the Nextion Display
 //        and to verify the end of the string for incoming data.
@@ -167,12 +167,12 @@ String command = ""; // command from display
 String cmd_value = ""; // value from display
 
 // Setup async delay periods 
-unsigned long lastReadPeriod = 0;
-unsigned int readPeriod = 1220;
-unsigned long lastRegulationPeriod = 0;
-unsigned int regulationPeriod = 1100;
-unsigned long lastServoPeriod = 0;
-unsigned int servoPeriod = 1100;
+const unsigned long readPeriod = 1220;
+const unsigned long regulationPeriod = 1100;
+const unsigned long servoPeriod = 1100;
+unsigned long lastReadTime = 0;
+unsigned long lastRegulationTime = 0;
+unsigned long lastServoTime = 0;
 
 
 // ****************************************************************************
@@ -219,9 +219,9 @@ void loop() {
 // Read the temperature from the thermocouple in degrees F 
 
 // NOTE : ASYNC DELAY should be 220ms min for max6675 readCelsius() function
-  if((millis() - lastReadPeriod) > readPeriod){
+  if((millis() - lastReadTime) > readPeriod){
   // pattern guards aginst error for millis() overflow condition
-    lastReadPeriod = millis();
+    lastReadTime = millis();
     tempF = thermocouple.readFahrenheit();
     if (isnan(tempF)){
       Serial.println("Thermocouple Error."); // report a thermocouple error
@@ -234,8 +234,8 @@ void loop() {
 // ****************************************************************************  
 // Check for and capture command and value sent from the touch screen
 // ****************************************************************************
-  if((millis() - lastRegulationPeriod) > regulationPeriod){
-    lastRegulationPeriod = millis();
+  if((millis() - lastRegulationTime) > regulationPeriod){
+    lastRegulationTime = millis();
     dfd += char(Serial2.read());
     // NOTE : COMMAND is 4 characters after C:C
     // NOTE : RESET dfd if THREE characters received and not C:C
@@ -323,8 +323,8 @@ void loop() {
   }
 
   // Drive servo and send damper position to Nextion display
-  if((millis() - lastServoPeriod) > servoPeriod){
-    lastServoPeriod = millis();
+  if((millis() - lastServoTime) > servoPeriod){
+    lastServoTime = millis();
     diff = targetDamper - damper;
     if(diff != 0) {
       dampIncr = diff / abs(diff);
