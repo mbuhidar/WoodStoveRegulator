@@ -145,7 +145,6 @@ float endTrigger = 25000;
 int angle = 0;
 int damper = 0;
 int targetDamper = 0;
-int dampIncr = 0;
 int diff = 0;
 float maxDamper = 100;  // Sets maximum damper setting
 float minDamper = 0.0;    // Sets minimum damper setting
@@ -162,17 +161,20 @@ float tempHist[6] = {0, 0, 0, 0, 0, 0};
 //        and to verify the end of the string for incoming data.
 
 String endChar = String(char(0xff)) + String(char(0xff)) + String(char(0xff));
-String dfd  = ""; // data from display
-String command = ""; // command from display
+String dfd  = "";      // data from display
+String command = "";   // command from display
 String cmd_value = ""; // value from display
+bool autoMode = true;  // auto mode flag
 
 // Setup async delay periods 
-const unsigned long readPeriod = 1220;
-const unsigned long regulationPeriod = 1100;
-const unsigned long servoPeriod = 1100;
+const unsigned long readPeriod = 500;
+const unsigned long regulationPeriod = 500;
+const unsigned long servoPeriod = 300;
+const unsigned long serialPrintPeriod = 1000;
 unsigned long lastReadTime = 0;
 unsigned long lastRegulationTime = 0;
 unsigned long lastServoTime = 0;
+unsigned long lastPrintTime = 0;
 
 
 // ****************************************************************************
@@ -206,7 +208,7 @@ void setup() {
   myservo.attach(10);  // attach servo object to pin 10
   // TODO: calculate center angle for servo and write to servo
   myservo.write(0);    // write 0 deg angle to servo object
-  myservo.detach();    // detach servo object from its pin
+  // servo detach handled in regulation function
   //pinMode(buzzerPort, OUTPUT); // configure buzzer pin as an output
 }
 
@@ -222,7 +224,7 @@ void loop() {
   if((millis() - lastReadTime) > readPeriod){
   // pattern guards aginst error for millis() overflow condition
     lastReadTime = millis();
-    tempF = thermocouple.readFahrenheit();
+    tempF = (int)thermocouple.readFahrenheit();
     if (isnan(tempF)){
       Serial.println("Thermocouple Error."); // report a thermocouple error
     }
@@ -234,37 +236,48 @@ void loop() {
 // ****************************************************************************  
 // Check for and capture command and value sent from the touch screen
 // ****************************************************************************
-  if((millis() - lastRegulationTime) > regulationPeriod){
-    lastRegulationTime = millis();
+
+  if (Serial2.available()) {
     dfd += char(Serial2.read());
     // NOTE : COMMAND is 4 characters after C:C
     // NOTE : RESET dfd if THREE characters received and not C:C
-    if(dfd.length()>3 && dfd.substring(0,3)!="C:C") dfd="";
-    else{
+    if (dfd.length()>3 && dfd.substring(0,3)!="C:C") dfd="";
+    else {
       // NOTE : If string ends in C?C then command completed
-      if(dfd.substring((dfd.length()-3),dfd.length()) == "C?C"){
+      if (dfd.substring((dfd.length()-3),dfd.length()) == "C?C") {
         // NOTE : Get the command
         command = dfd.substring(3,7);
         // NOTE : Get the value(int or string)
         cmd_value = dfd.substring(7,dfd.length()-3);
         dfd="";
+        Serial.println();
+        Serial.print(command);
+        Serial.println();
+        Serial.println();
       }
     }
+  }
+
+  if ((millis() - lastRegulationTime) > regulationPeriod) {
+    lastRegulationTime = millis();
 
     // Set target temp based on input from Nextion display auto screen
-    if(command == "TARG") targetTempF = cmd_value.toInt();
-    
-    // Check for manual damper regulation mode or enter auto regulation mode
-    if (command == "DAMP") {  
+    if (command == "TARG") {
+      targetTempF = cmd_value.toInt();
+      autoMode = true;
+    }
+    else if (command == "DAMP") {
       // Manual damper regulation mode
-      errI = 0;  // reset integral term based on user intent for manual control
-      errD = 0;  // reset derivative term based on user intent for manual control
+      errI = 0;  // reset integral term based on selection of manual control
+      errD = 0;  // reset derivative term based on selection of manual control
       //endBuzzer = true;  // setting to disable end of fire buzzer
       //refillBuzzer = true;  //setting to disable refill buzzer
       // set damper target to value from Nextion display
       targetDamper = cmd_value.toInt();
+      autoMode = false;
     }
-    else { 
+  
+    if (autoMode == true) {
       if (errI < endTrigger) {
         // Automatic PID regulation
         errP = targetTempF - tempF;        // set proportional term
@@ -273,12 +286,10 @@ void loop() {
         errOld = errP;
         // Call function that checks if wood is refilled to update tracking array
         woodFilled(tempF);
-
         // set damper position and limit damper values to physical constraints
         targetDamper = (int)(kP * errP + kI * errI + kD * errD);
         if (targetDamper < minDamper) targetDamper = minDamper;
         if (targetDamper > maxDamper) targetDamper = maxDamper;
-
         //Refill Alarm
         //if (errI > refillTrigger) {
         //  messageDamp = "Dmp " + String(damper) + "%   Fill "; // set damper output message, fill
@@ -295,14 +306,13 @@ void loop() {
         //    errI = 0;  // reset integral term after wood refill
         //    refillBuzzer = true;  // reset buzzer toggle
         //  }
-        }
-
+      }
       else {
         // End of combustion condition for errI >= endTrigger
-
+  
         // set damper output message to "end"
         if (tempF < tempFMin) {
-          targetDamper = targetDamper; // zeroDamper;
+          targetDamper = targetDamper; // TODO include zeroDamper;
         }
         //if (endBuzzer) {
         //  for (int i = 0; i < buzzerEndRepeat; i++) {
@@ -313,7 +323,7 @@ void loop() {
         //  }
         //  endBuzzer = false;
         //}
-
+  
         // Check if wood has been added and reset errI if so
         if (woodFilled(tempF)) {
           errI = 0;  // reset integral term after wood refill
@@ -323,48 +333,53 @@ void loop() {
   }
 
   // Drive servo and send damper position to Nextion display
-  if((millis() - lastServoTime) > servoPeriod){
+  if ((millis() - lastServoTime) > servoPeriod) {
     lastServoTime = millis();
     diff = targetDamper - damper;
-    if(diff != 0) {
-      dampIncr = diff / abs(diff);
+    if (diff != 0) {
       myservo.attach(10);
-
-      damper += dampIncr;
+      damper += diff / abs(diff);
       angle = (int)((damper * servoRange) /
               (maxDamper * servoCalibration) + servoOffset);
       myservo.write(angle);
-      myservo.detach();
       // Send damper angle to Nextion display
+      delay(200);
+      myservo.detach();
       Serial2.print("auto_page.n1.val=" + String(damper) + endChar);
+    }
+    else {
+      myservo.detach();
     }
   }
 
   // Regulator model data via serial output
   // Output: tempF, damper%, damper(calculated), damperP, damperI, damperD, errP, errI, errD
 
-  Serial.print(tempF);
-  Serial.print(",");
-  Serial.print(damper);
-  Serial.print(",");
-  Serial.print(targetDamper);
-  Serial.print(",");
-  Serial.print(angle);
-  Serial.print(",");
-  Serial.print(round(kP*errP + kI*errI + kD+errD));
-  Serial.print(",");
-  Serial.print(round(kP*errP));
-  Serial.print(",");
-  Serial.print(round(kI*errI));
-  Serial.print(",");
-  Serial.print(round(kD*errD));
-  Serial.print(",");  
-  Serial.print(errP);
-  Serial.print(",");
-  Serial.print(errI);
-  Serial.print(",");
-  Serial.print(errD);
-  Serial.print(",");    
-  Serial.println();
+  if ((millis() - lastPrintTime) > serialPrintPeriod) {
+    lastPrintTime = millis();
 
+    Serial.print(tempF);
+    Serial.print(",");
+    Serial.print(damper);
+    Serial.print(",");
+    Serial.print(targetDamper);
+    Serial.print(",");
+    Serial.print(angle);
+    Serial.print(",");
+    Serial.print(round(kP*errP + kI*errI + kD+errD));
+    Serial.print(",");
+    Serial.print(round(kP*errP));
+    Serial.print(",");
+    Serial.print(round(kI*errI));
+    Serial.print(",");
+    Serial.print(round(kD*errD));
+    Serial.print(",");  
+    Serial.print(errP);
+    Serial.print(",");
+    Serial.print(errI);
+    Serial.print(",");
+    Serial.print(errD);
+    Serial.print(",");    
+    Serial.println();
+  }
 }
