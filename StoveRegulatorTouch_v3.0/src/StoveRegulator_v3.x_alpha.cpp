@@ -67,16 +67,16 @@
 #include <max6675.h>
 #include <Servo.h>
 #include <math.h>
-//#include <SoftwareSerial.h>
-#include <AltSoftSerial.h>
+#include <SoftwareSerial.h>
+//#include <AltSoftSerial.h>
 
 // ****************************************************************************
 // Device setup and initialization:
 // ****************************************************************************
 
 // Software Serial pin mapping variables:
-const int rxPort = 8;               // RX pin on Arduino
-const int txPort = 9;               // TX pin on Arduino
+const int rxPort = 2;               // RX pin on Arduino
+const int txPort = 3;               // TX pin on Arduino
 
 // Thermocouple pin mapping variables and compensation error variable:
 const int thermoCsPort = 6;         // CS pin on MAX6675; chip select
@@ -105,8 +105,8 @@ int buzzerEndDelay = 2000;
 // Device objects - create servo and thermocouple objects 
 Servo myservo;
 MAX6675 thermocouple(thermoSckkPort, thermoCsPort, thermoSoPort); 
-// SoftwareSerial Serial2(rxPort, txPort); // RX, TX
-AltSoftSerial Serial2(rxPort, txPort); // RX, TX
+SoftwareSerial Serial2(rxPort, txPort); // RX, TX
+// AltSoftSerial Serial2(rxPort, txPort); // RX, TX
 // AltSoftSerial renders PWM unusable on pins 3 and 11
 
 // Servo calibration settings:
