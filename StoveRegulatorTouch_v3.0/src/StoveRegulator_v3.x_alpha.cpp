@@ -204,15 +204,15 @@ bool woodFilled(int currentTemp) {
 // ****************************************************************************
 
 void setup() {
-  //pinMode(rxPort, INPUT);
-  //pinMode(txPort, OUTPUT);
-  Serial.begin(9600);  // serial port for debugging Arduino and temp alorithm
-  Serial2.begin(9600); // serial port for communicating with touch screen
-  myservo.attach(11);  // attach servo object to pin 11
+  // hardware port used for output to serial monitor and display command input
+  Serial.begin(9600);
+  // serial port for sending commands to display - SofwareSerial sets pinModes
+  Serial2.begin(9600);
+  // use pin 11 vs pin 10 for servo to avoid conflict if using AltSoftSerial
+  myservo.attach(11);
   // TODO: calculate center angle for servo and write to servo
   myservo.write(0);    // write 0 deg angle to servo object
-  // servo detach handled in regulation function
-  delay(300);         // delay to allow servo to settle
+  delay(300);         // delay to allow servo to move
   myservo.detach();    // detach servo object
   //pinMode(buzzerPort, OUTPUT); // configure buzzer pin as an output
 }
@@ -242,8 +242,8 @@ void loop() {
 // Check for and capture command and value sent from the touch screen
 // ****************************************************************************
 
-  if (Serial2.available() > 0) {
-    dfd += char(Serial2.read());
+  if (Serial.available() > 0) {
+    dfd += char(Serial.read());
     Serial.println();
     Serial.print(dfd);
     Serial.println();
@@ -353,9 +353,9 @@ void loop() {
       angle = (int)((damper * servoRange) /
               (maxDamper * servoCalibration) + servoOffset);
       myservo.write(angle);
-      // Send damper angle to Nextion display
       delay(200);
       myservo.detach();
+      // Send damper angle to Nextion display via soft serial tx
       Serial2.print("auto_page.n1.val=" + String(damper) + endChar);
     }
     else {
