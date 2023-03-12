@@ -204,9 +204,9 @@ bool woodFilled(int currentTemp) {
 // ****************************************************************************
 
 void setup() {
-  // hardware port used for output to serial monitor and display command input
+  // hardware port used for output to serial monitor
   Serial.begin(9600);
-  // serial port for sending commands to display - SofwareSerial sets pinModes
+  // port for display display communication - SofwareSerial sets pinModes
   Serial2.begin(9600);
   // use pin 11 vs pin 10 for servo to avoid conflict if using AltSoftSerial
   myservo.attach(11);
@@ -242,8 +242,8 @@ void loop() {
 // Check for and capture command and value sent from the touch screen
 // ****************************************************************************
 
-  if (Serial.available() > 0) {
-    dfd += char(Serial.read());
+  if (Serial2.available() > 0) {
+    dfd += char(Serial2.read());
     Serial.println();
     Serial.print(dfd);
     Serial.println();
