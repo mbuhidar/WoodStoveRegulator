@@ -68,7 +68,6 @@
 #include <Servo.h>
 #include <math.h>
 #include <SoftwareSerial.h>
-//#include <AltSoftSerial.h>
 
 // ****************************************************************************
 // Device setup and initialization:
@@ -106,11 +105,8 @@ int buzzerEndDelay = 2000;
 Servo myservo;
 MAX6675 thermocouple(thermoSckkPort, thermoCsPort, thermoSoPort); 
 SoftwareSerial Serial2(rxPort, txPort); // RX, TX
-// AltSoftSerial Serial2(rxPort, txPort); // RX, TX
-// AltSoftSerial renders PWM unusable on pins 3 and 11
 
 // Servo calibration settings:
-
 // Servo rate calibration: neutral calibration is 1.0 - adjust value so servo
 // arm drives closed damper when damper variable equals 0 (0%)
 float servoCalibration = 1.0;
