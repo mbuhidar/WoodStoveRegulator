@@ -67,19 +67,21 @@
 #include <max6675.h>
 #include <Servo.h>
 #include <math.h>
-#include <SoftwareSerial.h>
+//#include <SoftwareSerial.h>
+#include <AltSoftSerial.h>
 
 // ****************************************************************************
 // Device setup and initialization:
 // ****************************************************************************
 
-// Software Serial port setup:
-SoftwareSerial Serial2(2, 3); // RX, TX
+// Software Serial pin mapping variables:
+const int rxPort = 8;               // RX pin on Arduino
+const int txPort = 9;               // TX pin on Arduino
 
 // Thermocouple pin mapping variables and compensation error variable:
-int thermoCsPort = 6;               // CS pin on MAX6675; chip select
-int thermoSoPort = 7;               // SO pin of MAX6675; serial output
-int thermoSckkPort = 8;             // SCK pin of MAX6675; serial clock input
+const int thermoCsPort = 6;         // CS pin on MAX6675; chip select
+const int thermoSoPort = 7;         // SO pin of MAX6675; serial output
+const int thermoSckkPort = 8;       // SCK pin of MAX6675; serial clock input
 float error = 0.0;                  // Temperature compensation error
 
 // Buzzer setup variables:
@@ -103,6 +105,9 @@ int buzzerEndDelay = 2000;
 // Device objects - create servo and thermocouple objects 
 Servo myservo;
 MAX6675 thermocouple(thermoSckkPort, thermoCsPort, thermoSoPort); 
+// SoftwareSerial Serial2(rxPort, txPort); // RX, TX
+AltSoftSerial Serial2(rxPort, txPort); // RX, TX
+// AltSoftSerial renders PWM unusable on pins 3 and 11
 
 // Servo calibration settings:
 
@@ -203,12 +208,16 @@ bool woodFilled(int currentTemp) {
 // ****************************************************************************
 
 void setup() {
+  //pinMode(rxPort, INPUT);
+  //pinMode(txPort, OUTPUT);
   Serial.begin(9600);  // serial port for debugging Arduino and temp alorithm
   Serial2.begin(9600); // serial port for communicating with touch screen
-  myservo.attach(10);  // attach servo object to pin 10
+  myservo.attach(11);  // attach servo object to pin 11
   // TODO: calculate center angle for servo and write to servo
   myservo.write(0);    // write 0 deg angle to servo object
   // servo detach handled in regulation function
+  delay(300);         // delay to allow servo to settle
+  myservo.detach();    // detach servo object
   //pinMode(buzzerPort, OUTPUT); // configure buzzer pin as an output
 }
 
@@ -237,11 +246,14 @@ void loop() {
 // Check for and capture command and value sent from the touch screen
 // ****************************************************************************
 
-  if (Serial2.available()) {
+  if (Serial2.available() > 0) {
     dfd += char(Serial2.read());
+    Serial.println();
+    Serial.print(dfd);
+    Serial.println();
     // NOTE : COMMAND is 4 characters after C:C
     // NOTE : RESET dfd if THREE characters received and not C:C
-    if (dfd.length()>3 && dfd.substring(0,3)!="C:C") dfd="";
+    if (dfd.length()>2 && dfd.substring(0,3)!="C:C") dfd="";
     else {
       // NOTE : If string ends in C?C then command completed
       if (dfd.substring((dfd.length()-3),dfd.length()) == "C?C") {
@@ -252,14 +264,16 @@ void loop() {
         dfd="";
         Serial.println();
         Serial.print(command);
+        Serial.print(", ");
+        Serial.print(cmd_value);
         Serial.println();
         Serial.println();
       }
     }
   }
 
-  if ((millis() - lastRegulationTime) > regulationPeriod) {
-    lastRegulationTime = millis();
+  //if ((millis() - lastRegulationTime) > regulationPeriod) {
+  //  lastRegulationTime = millis();
 
     // Set target temp based on input from Nextion display auto screen
     if (command == "TARG") {
@@ -292,7 +306,8 @@ void loop() {
         if (targetDamper > maxDamper) targetDamper = maxDamper;
         //Refill Alarm
         //if (errI > refillTrigger) {
-        //  messageDamp = "Dmp " + String(damper) + "%   Fill "; // set damper output message, fill
+        // set damper output message, fill
+        //  messageDamp = "Dmp " + String(damper) + "%   Fill ";
         //  if (refillBuzzer) {
         //    for (int i = 0; i < buzzerRefillRepeat; i++) {
         //      tone(buzzerPort, buzzerRefillFrequency);
@@ -330,14 +345,14 @@ void loop() {
         }
       }
     }
-  }
+  //}
 
   // Drive servo and send damper position to Nextion display
   if ((millis() - lastServoTime) > servoPeriod) {
     lastServoTime = millis();
     diff = targetDamper - damper;
     if (diff != 0) {
-      myservo.attach(10);
+      myservo.attach(11);
       damper += diff / abs(diff);
       angle = (int)((damper * servoRange) /
               (maxDamper * servoCalibration) + servoOffset);
