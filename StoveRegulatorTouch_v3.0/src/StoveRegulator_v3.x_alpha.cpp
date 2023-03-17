@@ -168,7 +168,7 @@ String cmd_value = ""; // value from display
 bool autoMode = true;  // auto mode flag
 
 // Setup async delay periods 
-const unsigned long readPeriod = 500;
+const unsigned long readPeriod = 1000;
 const unsigned long regulationPeriod = 500;
 const unsigned long servoPeriod = 300;
 const unsigned long serialPrintPeriod = 1000;
@@ -208,6 +208,10 @@ void setup() {
   Serial.begin(9600);
   // port for display display communication - SofwareSerial sets pinModes
   Serial2.begin(9600);
+
+  //Serial2.print("baud=28800"); // set baud rate for display
+  //Serial2.begin(28800); 
+
   // use pin 11 vs pin 10 for servo to avoid conflict if using AltSoftSerial
   myservo.attach(11);
   // TODO: calculate center angle for servo and write to servo
@@ -235,7 +239,9 @@ void loop() {
     }
     // Write temperature to Nextion display auto and manual screen temp fields 
     Serial2.print("auto_page.n2.val=" + String(tempF) + endChar);
+    Serial2.flush();
     Serial2.print("man_page.n2.val=" + String(tempF) + endChar);
+    Serial2.flush();
   }
   
 // ****************************************************************************  
@@ -244,12 +250,13 @@ void loop() {
 
   if (Serial2.available() > 0) {
     dfd += char(Serial2.read());
-    Serial.println();
-    Serial.print(dfd);
-    Serial.println();
+    Serial.println(dfd); 
+    Serial.flush();
     // NOTE : COMMAND is 4 characters after C:C
     // NOTE : RESET dfd if THREE characters received and not C:C
-    if (dfd.length()>2 && dfd.substring(0,3)!="C:C") dfd="";
+    if (dfd.length()>2 && dfd.substring(0,3)!="C:C") {
+      dfd="";
+    }
     else {
       // NOTE : If string ends in C?C then command completed
       if (dfd.substring((dfd.length()-3),dfd.length()) == "C?C") {
@@ -264,6 +271,9 @@ void loop() {
         Serial.print(cmd_value);
         Serial.println();
         Serial.println();
+        Serial.flush();
+
+        Serial2.flush();
       }
     }
   }
@@ -357,6 +367,7 @@ void loop() {
       myservo.detach();
       // Send damper angle to Nextion display via soft serial tx
       Serial2.print("auto_page.n1.val=" + String(damper) + endChar);
+      Serial2.flush();
     }
     else {
       myservo.detach();
@@ -365,7 +376,7 @@ void loop() {
 
   // Regulator model data via serial output
   // Output: tempF, damper%, damper(calculated), damperP, damperI, damperD, errP, errI, errD
-
+  /*
   if ((millis() - lastPrintTime) > serialPrintPeriod) {
     lastPrintTime = millis();
 
@@ -393,4 +404,5 @@ void loop() {
     Serial.print(",");    
     Serial.println();
   }
+  */
 }
