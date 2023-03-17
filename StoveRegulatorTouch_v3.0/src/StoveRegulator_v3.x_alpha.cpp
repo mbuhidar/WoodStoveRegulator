@@ -82,8 +82,8 @@
 // ****************************************************************************
 
 // Software Serial pin mapping variables:
-const int rxPort = 2;               // RX pin on Arduino
-const int txPort = 3;               // TX pin on Arduino
+const int rxPort = 10;               // RX pin on Arduino
+const int txPort = 11;               // TX pin on Arduino
 
 // Thermocouple pin mapping variables and compensation error variable:
 const int thermoCsPort = 6;         // CS pin on MAX6675; chip select
@@ -212,13 +212,13 @@ bool woodFilled(int currentTemp) {
 // ****************************************************************************
 
 void setup() {
-  // hardware port used for output to serial monitor
+  // hardware port for display display communication - display defaults to 9600
   Serial.begin(9600);
-  // port for display display communication - SofwareSerial sets pinModes
+  // software port for output to serial monitor - SofwareSerial sets pinModes
   Serial2.begin(9600);
 
-  //Serial2.print("baud=28800"); // set baud rate for display
-  //Serial2.begin(28800); 
+  //Serial.print("baud=28800"); // set baud rate for display
+  //Serial.begin(28800); 
 
   // use pin 11 vs pin 10 for servo to avoid conflict if using AltSoftSerial
   myservo.attach(11);
@@ -243,23 +243,20 @@ void loop() {
     lastReadTime = millis();
     tempF = (int)thermocouple.readFahrenheit();
     if (isnan(tempF)){
-      Serial.println("Thermocouple Error."); // report a thermocouple error
+      Serial2.println("Thermocouple Error."); // report a thermocouple error
     }
     // Write temperature to Nextion display auto and manual screen temp fields 
-    Serial2.print("auto_page.n2.val=" + String(tempF) + endChar);
-    Serial2.flush();
-    Serial2.print("man_page.n2.val=" + String(tempF) + endChar);
-    Serial2.flush();
+    Serial.print("auto_page.n2.val=" + String(tempF) + endChar);
+    Serial.print("man_page.n2.val=" + String(tempF) + endChar);
   }
   
 // ****************************************************************************  
 // Check for and capture command and value sent from the touch screen
 // ****************************************************************************
 
-  if (Serial2.available() > 0) {
-    dfd += char(Serial2.read());
-    Serial.println(dfd); 
-    Serial.flush();
+  if (Serial.available() > 0) {
+    dfd += char(Serial.read());
+    Serial2.println(dfd); 
     // NOTE : COMMAND is 4 characters after C:C
     // NOTE : RESET dfd if THREE characters received and not C:C
     if (dfd.length()>2 && dfd.substring(0,3)!="C:C") {
@@ -273,15 +270,12 @@ void loop() {
         // NOTE : Get the value(int or string)
         cmd_value = dfd.substring(7,dfd.length()-3);
         dfd="";
-        Serial.println();
-        Serial.print(command);
-        Serial.print(", ");
-        Serial.print(cmd_value);
-        Serial.println();
-        Serial.println();
-        Serial.flush();
-
-        Serial2.flush();
+        Serial2.println();
+        Serial2.print(command);
+        Serial2.print(", ");
+        Serial2.print(cmd_value);
+        Serial2.println();
+        Serial2.println();
       }
     }
   }
@@ -374,8 +368,7 @@ void loop() {
       delay(200);
       myservo.detach();
       // Send damper angle to Nextion display via soft serial tx
-      Serial2.print("auto_page.n1.val=" + String(damper) + endChar);
-      Serial2.flush();
+      Serial.print("auto_page.n1.val=" + String(damper) + endChar);
     }
     else {
       myservo.detach();
@@ -388,29 +381,29 @@ void loop() {
   if ((millis() - lastPrintTime) > serialPrintPeriod) {
     lastPrintTime = millis();
 
-    Serial.print(tempF);
-    Serial.print(",");
-    Serial.print(damper);
-    Serial.print(",");
-    Serial.print(targetDamper);
-    Serial.print(",");
-    Serial.print(angle);
-    Serial.print(",");
-    Serial.print(round(kP*errP + kI*errI + kD+errD));
-    Serial.print(",");
-    Serial.print(round(kP*errP));
-    Serial.print(",");
-    Serial.print(round(kI*errI));
-    Serial.print(",");
-    Serial.print(round(kD*errD));
-    Serial.print(",");  
-    Serial.print(errP);
-    Serial.print(",");
-    Serial.print(errI);
-    Serial.print(",");
-    Serial.print(errD);
-    Serial.print(",");    
-    Serial.println();
+    Serial2.print(tempF);
+    Serial2.print(",");
+    Serial2.print(damper);
+    Serial2.print(",");
+    Serial2.print(targetDamper);
+    Serial2.print(",");
+    Serial2.print(angle);
+    Serial2.print(",");
+    Serial2.print(round(kP*errP + kI*errI + kD+errD));
+    Serial2.print(",");
+    Serial2.print(round(kP*errP));
+    Serial2.print(",");
+    Serial2.print(round(kI*errI));
+    Serial2.print(",");
+    Serial2.print(round(kD*errD));
+    Serial2.print(",");  
+    Serial2.print(errP);
+    Serial2.print(",");
+    Serial2.print(errI);
+    Serial2.print(",");
+    Serial2.print(errD);
+    Serial2.print(",");    
+    Serial2.println();
   }
   */
 }
