@@ -1,5 +1,5 @@
 /*
- Wood Stove Regulator - Version 3.x
+ Wood Stove Regulator - Version 4.0 
  Copyright (C) 2020  Michael Buhidar (GitHub: mbuhidar)
  
  This program is free software: you can redistribute it and/or modify
@@ -18,7 +18,7 @@
  With thanks to philco for many of the foundational ideas for this project
  (https://www.instructables.com/id/Wood-Stove-Regulator/)
 
- The code drives an Arduino microcontroller based system that automatically 
+ The code drives an ESP32 microcontroller based system that automatically 
  controls the air damper on a wood stove in order to maintain a constant
  exhaust pipe temperature.  
  
@@ -75,7 +75,6 @@
 #include <max6675.h>
 #include <Servo.h>
 #include <math.h>
-#include <SoftwareSerial.h>
 
 // ****************************************************************************
 // Device setup and initialization:
