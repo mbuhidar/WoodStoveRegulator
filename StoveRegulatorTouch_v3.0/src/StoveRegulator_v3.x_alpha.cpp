@@ -61,6 +61,14 @@
      added or when stove damper will be closed due to end of fire event.
 */
 
+// ****************************************************************************
+// Note: This code is written for the Arduino Uno microcontroller, however,
+// more than one hardware serial bus is needed for this project if serial
+// output for data analysis is needed. The Arduino Uno only has one hardware
+// serial bus. Code could be used for other Arduino microcontrollers that have
+// more than one hardware serial bus, but the code would need to be modified.
+// ****************************************************************************
+
 // Include libraries for Arduino, max6675, servo, math, and software serial.
 
 #include <Arduino.h>
