@@ -61,33 +61,33 @@
      added or when stove damper will be closed due to end of fire event.
 */
 
-// ****************************************************************************
-// Note: This code is written for the Arduino Uno microcontroller, however,
-// more than one hardware serial bus is needed for this project if serial
-// output for data analysis is needed. The Arduino Uno only has one hardware
-// serial bus. Code could be used for other Arduino microcontrollers that have
-// more than one hardware serial bus, but the code would need to be modified.
-// ****************************************************************************
-
-// Include libraries for Arduino, max6675, servo, math, and software serial.
+// Include libraries for Arduino, max6675, ESP32 servo, and math
 
 #include <Arduino.h>
 #include <max6675.h>
-#include <Servo.h>
+#include <ESP32Servo.h>
 #include <math.h>
 
 // ****************************************************************************
 // Device setup and initialization:
 // ****************************************************************************
 
-// Software Serial pin mapping variables:
-const int rxPort = 10;               // RX pin on Arduino
-const int txPort = 11;               // TX pin on Arduino
+// Serial pin mapping:
+#define RXD2 16
+#define TXD2 17
+
+// Servo pin mapping:
+#define SERVO_PIN 18 
 
 // Thermocouple pin mapping variables and compensation error variable:
-const int thermoCsPort = 6;         // CS pin on MAX6675; chip select
-const int thermoSoPort = 7;         // SO pin of MAX6675; serial output
-const int thermoSckkPort = 8;       // SCK pin of MAX6675; serial clock input
+const int thermoCsPort = 21;        // CS pin on MAX6675; chip select
+const int thermoSoPort = 22;        // SO pin of MAX6675; serial output
+const int thermoSckkPort = 23;      // SCK pin of MAX6675; serial clock input
+// Temporary potentiometer variable for testing - delete next 3 lines
+int potPin = 36; // GPIO pin used to connect the potentiometer (analog in)
+int ADC_Max = 4096; // maximum value returned by analogRead()
+int val = 0;
+
 float error = 0.0;                  // Temperature compensation error
 
 // Buzzer setup variables:
@@ -110,8 +110,7 @@ int buzzerEndDelay = 2000;
 
 // Device objects - create servo and thermocouple objects 
 Servo myservo;
-MAX6675 thermocouple(thermoSckkPort, thermoCsPort, thermoSoPort); 
-SoftwareSerial Serial2(rxPort, txPort); // RX, TX
+MAX6675 thermocouple(thermoSckkPort, thermoCsPort, thermoSoPort);
 
 // Servo calibration settings:
 // Servo rate calibration: neutral calibration is 1.0 - adjust value so servo
@@ -176,9 +175,9 @@ bool autoMode = true;  // auto mode flag
 
 // Setup async delay periods 
 const unsigned long readPeriod = 1000;
-const unsigned long regulationPeriod = 500;
+const unsigned long regulationPeriod = 1000;
 const unsigned long servoPeriod = 300;
-const unsigned long serialPrintPeriod = 1000;
+const unsigned long serialPrintPeriod = 3000;
 unsigned long lastReadTime = 0;
 unsigned long lastRegulationTime = 0;
 unsigned long lastServoTime = 0;
@@ -207,21 +206,18 @@ bool woodFilled(int currentTemp) {
 }
 
 // ****************************************************************************
-// Arduino setup
+// Setup
 // ****************************************************************************
 
 void setup() {
-  // hardware port for display display communication - display defaults to 9600
+
+  // hardware port for output to serial monitor
   Serial.begin(9600);
-  // software port for output to serial monitor - SofwareSerial sets pinModes
-  Serial2.begin(9600);
+  // hardware port 2 for display communication - display defaults to 9600 baud
+  Serial2.begin(9600, SERIAL_8N1, RXD2, TXD2);
 
-  //Serial.print("baud=28800"); // set baud rate for display
-  //Serial.begin(28800); 
+  myservo.attach(SERVO_PIN); // attaches the servo to the servo object
 
-  // use pin 11 vs pin 10 for servo to avoid conflict if using AltSoftSerial
-  myservo.attach(11);
-  // TODO: calculate center angle for servo and write to servo
   myservo.write(0);    // write 0 deg angle to servo object
   delay(300);         // delay to allow servo to move
   myservo.detach();    // detach servo object
@@ -229,7 +225,7 @@ void setup() {
 }
 
 // ****************************************************************************
-// Arduino loop function
+// Loop function
 // ****************************************************************************
 
 void loop() {
@@ -240,25 +236,32 @@ void loop() {
   if((millis() - lastReadTime) > readPeriod){
   // pattern guards aginst error for millis() overflow condition
     lastReadTime = millis();
-    tempF = (int)thermocouple.readFahrenheit();
+
+    // temporary test code to emulate thermocouple reading
+    val = analogRead(potPin); // read the value of the potentiometer
+    val = map(val, 0, ADC_Max, 100, 600); // scale it to emulate thermocouple
+                                          // reading (0 - 1023 => 100 - 600)
+
+    tempF = val; // (int)thermocouple.readFahrenheit();
+
     if (isnan(tempF)){
-      Serial2.println("Thermocouple Error."); // report a thermocouple error
+      Serial.println("Thermocouple Error."); // report a thermocouple error
     }
     // Write temperature to Nextion display auto and manual screen temp fields 
-    Serial.print("auto_page.n2.val=" + String(tempF) + endChar);
-    Serial.print("man_page.n2.val=" + String(tempF) + endChar);
+    Serial2.print("auto_page.n2.val=" + String(tempF) + endChar);
+    Serial2.print("man_page.n2.val=" + String(tempF) + endChar);
   }
   
 // ****************************************************************************  
 // Check for and capture command and value sent from the touch screen
 // ****************************************************************************
 
-  if (Serial.available() > 0) {
-    dfd += char(Serial.read());
-    Serial2.println(dfd); 
+  if (Serial2.available() > 0) {
+    dfd += char(Serial2.read());
+    Serial.println(dfd); 
     // NOTE : COMMAND is 4 characters after C:C
     // NOTE : RESET dfd if THREE characters received and not C:C
-    if (dfd.length()>2 && dfd.substring(0,3)!="C:C") {
+    if (dfd.length()>3 && dfd.substring(0,3)!="C:C") {
       dfd="";
     }
     else {
@@ -269,19 +272,18 @@ void loop() {
         // NOTE : Get the value(int or string)
         cmd_value = dfd.substring(7,dfd.length()-3);
         dfd="";
-        Serial2.println();
-        Serial2.print(command);
-        Serial2.print(", ");
-        Serial2.print(cmd_value);
-        Serial2.println();
-        Serial2.println();
+        Serial.println();
+        Serial.print(command);
+        Serial.print(", ");
+        Serial.print(cmd_value);
+        Serial.println();
+        Serial.println();
       }
     }
   }
 
-  //if ((millis() - lastRegulationTime) > regulationPeriod) {
-  //  lastRegulationTime = millis();
-
+  if ((millis() - lastRegulationTime) > regulationPeriod) {
+    lastRegulationTime = millis();
     // Set target temp based on input from Nextion display auto screen
     if (command == "TARG") {
       targetTempF = cmd_value.toInt();
@@ -352,14 +354,14 @@ void loop() {
         }
       }
     }
-  //}
+  }
 
   // Drive servo and send damper position to Nextion display
   if ((millis() - lastServoTime) > servoPeriod) {
     lastServoTime = millis();
     diff = targetDamper - damper;
     if (diff != 0) {
-      myservo.attach(11);
+      myservo.attach(SERVO_PIN);  // attaches servo object
       damper += diff / abs(diff);
       angle = (int)((damper * servoRange) /
               (maxDamper * servoCalibration) + servoOffset);
@@ -367,7 +369,7 @@ void loop() {
       delay(200);
       myservo.detach();
       // Send damper angle to Nextion display via soft serial tx
-      Serial.print("auto_page.n1.val=" + String(damper) + endChar);
+      Serial2.print("auto_page.n1.val=" + String(damper) + endChar);
     }
     else {
       myservo.detach();
@@ -376,33 +378,36 @@ void loop() {
 
   // Regulator model data via serial output
   // Output: tempF, damper%, damper(calculated), damperP, damperI, damperD, errP, errI, errD
-  /*
+
   if ((millis() - lastPrintTime) > serialPrintPeriod) {
     lastPrintTime = millis();
 
-    Serial2.print(tempF);
-    Serial2.print(",");
-    Serial2.print(damper);
-    Serial2.print(",");
-    Serial2.print(targetDamper);
-    Serial2.print(",");
-    Serial2.print(angle);
-    Serial2.print(",");
-    Serial2.print(round(kP*errP + kI*errI + kD+errD));
-    Serial2.print(",");
-    Serial2.print(round(kP*errP));
-    Serial2.print(",");
-    Serial2.print(round(kI*errI));
-    Serial2.print(",");
-    Serial2.print(round(kD*errD));
-    Serial2.print(",");  
-    Serial2.print(errP);
-    Serial2.print(",");
-    Serial2.print(errI);
-    Serial2.print(",");
-    Serial2.print(errD);
-    Serial2.print(",");    
-    Serial2.println();
+    Serial.print("Temp: ");
+    Serial.print(tempF);
+    Serial.print(",");
+    Serial.print("Damper: ");
+    Serial.print(damper);
+    Serial.print(",");
+    Serial.print("TargetDamp: ");
+    Serial.print(targetDamper);
+    Serial.print(",");
+    Serial.print("Angle: ");
+    Serial.print(angle);
+    Serial.print(",");
+    Serial.print(round(kP*errP + kI*errI + kD+errD));
+    Serial.print(",");
+    Serial.print(round(kP*errP));
+    Serial.print(",");
+    Serial.print(round(kI*errI));
+    Serial.print(",");
+    Serial.print(round(kD*errD));
+    Serial.print(",");  
+    Serial.print(errP);
+    Serial.print(",");
+    Serial.print(errI);
+    Serial.print(",");
+    Serial.print(errD);
+    Serial.print(",");    
+    Serial.println();
   }
-  */
 }
