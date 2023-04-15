@@ -80,9 +80,9 @@
 #define SERVO_PIN 18 
 
 // Thermocouple pin mapping variables and compensation error variable:
-const int thermoCsPort = 21;        // CS pin on MAX6675; chip select
-const int thermoSoPort = 22;        // SO pin of MAX6675; serial output
-const int thermoSckkPort = 23;      // SCK pin of MAX6675; serial clock input
+const int thermoCsPort = 15;        // CS pin on MAX6675; chip select
+const int thermoSoPort = 12;        // SO pin of MAX6675; serial output
+const int thermoSckkPort = 14;      // SCK pin of MAX6675; serial clock input
 // Temporary potentiometer variable for testing - delete next 3 lines
 int potPin = 36; // GPIO pin used to connect the potentiometer (analog in)
 int ADC_Max = 4096; // maximum value returned by analogRead()
